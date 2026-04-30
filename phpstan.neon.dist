@@ -1,0 +1,8 @@
+parameters:
+	level: max
+	paths:
+		- src
+		- cli
+	bootstrapFiles:
+		- tests/bootstrap.php
+		- tools/phpstan-stubs/constants.stub.php

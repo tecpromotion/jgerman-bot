@@ -5,10 +5,16 @@ J!German Bot
 
 This repo holds the code powering automation for the JGerman Team. As of today it has the following feature: Autocreate issues to the [joomlagerman/joomla](https://github.com/joomlagerman/joomla) repo when an language changing PR at the [joomla/joomla-cms](https://github.com/joomla/joomla-cms) repo got merged (using [@jgerman-bot](https://github.com/jgerman-bot))
 
+## Requirements
+
+- PHP 8.5 or higher
+- Composer
+
 ## Initial Setup
 
 - `cd /repo/path/jgerman-bot`
 - `git clone git@github.com:joomlagerman/jgerman-bot.git .`
+- `composer install --no-dev`
 - `cp includes/constants.dist.php includes/constants.php`
 - `nano includes/constants.php` (Add the access data)
 - Setup an daily cronjob on this script: `php cli/jgerman-github-bot.php`
@@ -17,6 +23,23 @@ This repo holds the code powering automation for the JGerman Team. As of today i
 
 - `cd /repo/path/jgerman-bot`
 - `git reset --hard HEAD && git pull origin master`
+- `composer install --no-dev`
+
+## Upgrade Notes
+
+The `NOTIFYER_*_ENABED` constants were renamed to `NOTIFYER_*_ENABLED` (typo fix).
+After pulling the new version, update your existing `includes/constants.php`:
+
+- `NOTIFYER_SLACK_ENABED` → `NOTIFYER_SLACK_ENABLED`
+- `NOTIFYER_MATTERMOST_ENABED` → `NOTIFYER_MATTERMOST_ENABLED`
+- `NOTIFYER_TELEGRAM_ENABED` → `NOTIFYER_TELEGRAM_ENABLED`
+
+## Development
+
+- Run tests: `composer test`
+- Run static analysis: `composer stan`
+- Check code style: `composer cs-check`
+- Auto-fix code style: `composer cs-fix`
 
 ## Configuration
 
@@ -69,7 +92,7 @@ Holds a template of the body to be posted by the bot. This string allows the fol
 - `[sourcePullDiff]` => The full diff of the original PR via an `<details>` tab
 
 ### Notifyer Config
-#### NOTIFYER_SLACK_ENABED
+#### NOTIFYER_SLACK_ENABLED
 
 True or False whether the Slack notification should be anabled
 
@@ -81,7 +104,7 @@ The webhook URL pointing to the slack channel where the message shoud be send to
 
 THe Slack username the message should be send as
 
-#### NOTIFYER_MATTERMOST_ENABED
+#### NOTIFYER_MATTERMOST_ENABLED
 
 True or False whether the Slack notification should be anabled
 
@@ -89,7 +112,7 @@ True or False whether the Slack notification should be anabled
 
 The webhook URL pointing to the mattermost channel where the message should be send to
 
-#### NOTIFYER_TELEGRAM_ENABED
+#### NOTIFYER_TELEGRAM_ENABLED
 
 True or False whether the Slack notification should be anabled
 

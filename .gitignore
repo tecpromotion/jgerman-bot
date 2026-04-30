@@ -14,3 +14,8 @@ data/*.data
 
 # Ignore the content of the log folter
 logs/*.log
+
+# Tooling caches
+.php-cs-fixer.cache
+.phpunit.result.cache
+.phpunit.cache

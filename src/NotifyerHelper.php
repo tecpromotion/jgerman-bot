@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * JGerman Notifyer Helper based on the Joomla! Framework
  *
@@ -8,177 +11,67 @@
 
 namespace joomlagerman\Helper;
 
+use Joomla\Http\Http;
 use Joomla\Http\HttpFactory;
+use Joomla\Registry\Registry;
+use joomlagerman\Enum\NotificationChannel;
 
-/**
- * Class for github
- *
- * @since  1.0
- */
-class NotifyerHelper
+final class NotifyerHelper
 {
-	/**
-	 * The http factory
-	 *
-	 * @var    string
-	 * @since  1.0
-	 */
-	private $http;
+	private readonly Registry $options;
+	private readonly Http $http;
 
-	/**
-	 * Constructor.
-	 *
-	 * @param   array  $options  The options for the NotifyerHelper
-	 *
-	 * @since   1.0
-	 */
-	public function __construct($options)
+	public function __construct(Registry $options, ?Http $http = null)
 	{
-		$this->options = $options ?: new Registry;
-
-		$this->http = HttpFactory::getHttp();
+		$this->options = $options;
+		$this->http    = $http ?? (new HttpFactory())->getHttp();
 	}
 
 	/**
-	 * Get an option from the instance.
-	 *
-	 * @param   string  $key  The name of the option to get.
-	 *
-	 * @return  mixed  The option value.
-	 *
-	 * @since   1.0
+	 * @param  array<string, string>  $messageData
 	 */
-	public function getOption($key)
-	{
-		return isset($this->options[$key]) ? $this->options[$key] : null;
-	}
-
-	/**
-	 * Set an option for the instance.
-	 *
-	 * @param   string  $key    The name of the option to set.
-	 * @param   mixed   $value  The option value to set.
-	 *
-	 * @return  GithubApiHelper  This object for method chaining.
-	 *
-	 * @since   1.0
-	 */
-	public function setOption($key, $value)
-	{
-		$this->options[$key] = $value;
-
-		return $this;
-	}
-
-	/**
-	 * Get the Notification message with date and time.
-	 *
-	 * @param   array   $messageData  The messagedata
-	 * @param   string  $messageType  The log messagetype
-	 *
-	 * @return  string  The log message including metadata like dates
-	 *
-	 * @since   1.0
-	 */
-	private function getMessageTemplateNotificationMessage($messageData, $messageType = false): string
-	{
-		$message = $this->getOption('notifyer.messageTemplate');
-
-		foreach ($messageData as $key => $value)
-		{
-			$message = \str_replace('{' . $key . '}', $value, $message);
-		}
-
-		if (is_string($messageType))
-		{
-			return '[jgerman-bot] - [' . $messageType . '] - ' . $message . PHP_EOL;
-		}
-
-		return  '[jgerman-bot] - ' . $message . PHP_EOL;
-	}
-
-	/**
-	 * Send the Notificaton for the given message tempalte
-	 *
-	 * @param   array   $messageData  The messagedata
-	 * @param   string  $messageType  The log messagetype
-	 *
-	 * @return  void
-	 *
-	 * @since   1.0
-	 */
-	public function sendMessageTemplateNotification($messageData, $messageType = false): void
+	public function sendMessageTemplateNotification(array $messageData, ?string $messageType = null): void
 	{
 		$this->sendNotificationMessage(
-			$this->getMessageTemplateNotificationMessage(
-				$messageData,
-				$messageType
-			)
+			$this->getMessageTemplateNotificationMessage($messageData, $messageType)
 		);
 	}
 
-	/**
-	 * Send the Log Notifications
-	 *
-	 * @param   array  $message  The messagt to be sended out
-	 *
-	 * @return  void
-	 *
-	 * @since   1.0
-	 */
-	public function sendLogNotification($message): void
+	public function sendLogNotification(string $message): void
 	{
 		$this->sendNotificationMessage($message);
 	}
 
 	/**
-	 * Send the Notifications to the configured endpoints
-	 *
-	 * @param   array  $message  The messagt to be sended out
-	 *
-	 * @return  void
-	 *
-	 * @since   1.0
+	 * @param  array<string, string>  $messageData
 	 */
-	private function sendNotificationMessage($message): void
+	private function getMessageTemplateNotificationMessage(array $messageData, ?string $messageType): string
 	{
-		if ($this->getOption('slack.enabled') === true)
-		{
-			$data = [
-				'payload' => json_encode(
-					[
-						'username' => $this->getOption('slack.username'),
-						'text'     => $message,
-					]
-				)
-			];
+		$template = $this->options->get('notifyer.messageTemplate');
+		$message  = is_string($template) ? $template : '';
 
-			$this->http->post($this->getOption('slack.webhookurl'), $data);
+		foreach ($messageData as $key => $value) {
+			$message = str_replace('{' . $key . '}', $value, $message);
 		}
 
-		if ($this->getOption('mattermost.enabled') === true)
-		{
-			$data = [
-				'payload' => json_encode(
-					[
-						'text' => $message,
-					]
-				)
-			];
-
-			$this->http->post($this->getOption('mattermost.webhookurl'), $data);
+		if ($messageType !== null) {
+			return '[jgerman-bot] - [' . $messageType . '] - ' . $message . PHP_EOL;
 		}
 
-		if ($this->getOption('telegram.enabled') === true)
-		{
-			$data = [
-				'chat_id'                  => $this->getOption('telegram.chatId'),
-				'parse_mode'               => 'HTML',
-				'disable_web_page_preview' => 'true',
-				'text'                     => $message,
-			];
+		return '[jgerman-bot] - ' . $message . PHP_EOL;
+	}
 
-			$this->http->post('https://api.telegram.org/bot' . $this->getOption('telegram.botToken') . '/sendMessage', $data);
+	private function sendNotificationMessage(string $message): void
+	{
+		foreach (NotificationChannel::cases() as $channel) {
+			if (!$channel->isEnabled($this->options)) {
+				continue;
+			}
+
+			$this->http->post(
+				$channel->endpoint($this->options),
+				$channel->payload($message, $this->options)
+			);
 		}
 	}
 }

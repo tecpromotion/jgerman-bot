@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * JGerman Bot Configuration
  *
@@ -20,16 +23,16 @@ define('GITHUB_SOURCE_WATCHLABEL', '');
 define('GITHUB_TRANSLATION_OWNER', '');
 define('GITHUB_TRANSLATION_REPO', '');
 define('GITHUB_TRANSLATION_LABEL', '');
-define('GITHUB_TRANSLATION_ASSIGMENTS', '');
+define('GITHUB_TRANSLATION_ASSIGMENTS', []);
 define('GITHUB_TRANSLATION_TEMPLATE_BODY', '');
 
 // Notifyer Config
-define('NOTIFYER_SLACK_ENABED', '');
+define('NOTIFYER_SLACK_ENABLED', false);
 define('NOTIFYER_SLACK_WEBHOOKURL', '');
 define('NOTIFYER_SLACK_USERNAME', '');
-define('NOTIFYER_MATTERMOST_ENABED', '');
+define('NOTIFYER_MATTERMOST_ENABLED', false);
 define('NOTIFYER_MATTERMOST_WEBHOOKURL', '');
-define('NOTIFYER_TELEGRAM_ENABED', '');
+define('NOTIFYER_TELEGRAM_ENABLED', false);
 define('NOTIFYER_TELEGRAM_BOTTOKEN', '');
 define('NOTIFYER_TELEGRAM_CHATID', '');
 define('NOTIFYER_GITHUB_ISSUE_MESSAGE_TEMPLATE', '');

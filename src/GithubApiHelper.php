@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * JGerman GitHub Bot Helper based on the Joomla! Framework
  *
@@ -8,92 +11,56 @@
 
 namespace joomlagerman\Helper;
 
+use DateTimeImmutable;
+use DateTimeInterface;
 use Joomla\Github\Github;
 use Joomla\Http\HttpFactory;
 use Joomla\Registry\Registry;
 use Joomla\Uri\Uri;
+use joomlagerman\Enum\JoomlaBranch;
 
-/**
- * Class for github
- *
- * @since  1.0
- */
-class GithubApiHelper
+final class GithubApiHelper
 {
-	/**
-	 * The github object
-	 *
-	 * @var    Github
-	 * @since  1.0
-	 */
-	private $github;
+	private readonly Github $github;
+	private readonly Registry $options;
+	private readonly string $dataRootPath;
 
-	/**
-	 * The github object
-	 *
-	 * @var    string
-	 * @since  1.0
-	 */
-	private $options;
-
-	/**
-	 * Constructor.
-	 *
-	 * @param   array  $githubOptions  The options for the Joomla\Github\Github object
-	 * @param   array  $options        The options for the GithubApiHelper
-	 *
-	 * @since   1.0
-	 */
-	public function __construct($githubOptions, $options)
+	public function __construct(Registry $githubOptions, Registry $options)
 	{
-		$this->options = $options ?: new Registry;
+		$this->options = $options;
 
-		// Setup the default user agent if not already set.
-		if (!$this->getOption('userAgent'))
-		{
-			$this->setOption('userAgent', 'JGerman-Bot/1.0');
+		if ($this->options->get('userAgent') === null) {
+			$this->options->set('userAgent', 'JGerman-Bot/1.0');
 		}
 
-		$this->github = new Github($githubOptions);
+		$this->github       = new Github($githubOptions);
 		$this->dataRootPath = ROOT_PATH . '/data/';
 	}
 
-	/**
-	 * Returns the latest run date for the item
-	 *
-	 * @return  DateTime  A DateTime Object with the latest run date
-	 *
-	 * @since   1.0
-	 */
-	public function getLatestRunDateTime(): \DateTime
+	public function getOption(string $key): mixed
+	{
+		return $this->options->get($key);
+	}
+
+	public function getLatestRunDateTime(): DateTimeImmutable
 	{
 		$dataFileName = $this->getDateFileName('lastrun.data');
 
-		// When there is no file create one with an empty date so it is now.
-		if (!is_file($dataFileName))
-		{
-			$now = new \DateTime('now');
+		if (!is_file($dataFileName)) {
+			$now = new DateTimeImmutable('now');
 			file_put_contents($dataFileName, $now->format('Y-m-d'));
 		}
 
-		return new \DateTime(file_get_contents($dataFileName));
+		$contents = file_get_contents($dataFileName);
+
+		return new DateTimeImmutable($contents !== false ? $contents : 'now');
 	}
 
-	/**
-	 * Sets the latest run date to the given value
-	 *
-	 * @param   DateTime  $lastRunDateTime  The last run DateTime
-	 *
-	 * @return  void
-	 *
-	 * @since   1.0
-	 */
-	public function setLatestRunDateTime($lastRunDateTime): void
+	public function setLatestRunDateTime(DateTimeInterface $lastRunDateTime): void
 	{
 		$dataFileName = $this->getDateFileName('lastrun.data');
 
-		if (is_file($dataFileName))
-		{
+		if (is_file($dataFileName)) {
 			unlink($dataFileName);
 		}
 
@@ -101,77 +68,30 @@ class GithubApiHelper
 	}
 
 	/**
-	 * Returns the file name to save the latest run DataTime
+	 * Get all closed and merged PRs with the translation label since a given timestamp.
 	 *
-	 * @param   string  $fileName  The data filename to use
-	 *
-	 * @return  string  The dataFile path
-	 *
-	 * @since   1.0
+	 * @return  list<object>
 	 */
-	private function getDateFileName($fileName): string
+	public function getClosedAndMergedTranslationIssuesList(DateTimeInterface $since): array
 	{
-		return $this->dataRootPath . $fileName;
-	}
-
-	/**
-	 * Get an option from the instance.
-	 *
-	 * @param   string  $key  The name of the option to get.
-	 *
-	 * @return  mixed  The option value.
-	 *
-	 * @since   1.0
-	 */
-	public function getOption($key)
-	{
-		return isset($this->options[$key]) ? $this->options[$key] : null;
-	}
-
-	/**
-	 * Set an option for the instance.
-	 *
-	 * @param   string  $key    The name of the option to set.
-	 * @param   mixed   $value  The option value to set.
-	 *
-	 * @return  GithubApiHelper  This object for method chaining.
-	 *
-	 * @since   1.0
-	 */
-	public function setOption($key, $value)
-	{
-		$this->options[$key] = $value;
-
-		return $this;
-	}
-
-	/**
-	 * Get all closed and merged PRs with the translation label since a given timestamp
-	 *
-	 * @param   DateTime  $since  The timestamp since we want new data
-	 *
-	 * @return  array  An array of github Issue objects
-	 *
-	 * @since   1.0
-	 */
-	public function getClosedAndMergedTranslationIssuesList($since): array
-	{
-		// Get all closed issues with the translation label
-		$closedIssues = $this->getClosedTranslationIssuesList($since);
 		$closedAndMerged = [];
 
-		foreach ($closedIssues as $issue)
-		{
-			$closedAt = new \DateTime($issue->closed_at);
+		/** @var iterable<object{number: int, closed_at: string}> $closedIssues */
+		$closedIssues = $this->getClosedTranslationIssuesList($since);
 
-			// Make sure only the closedAt date is checked and we ignore any additional comments or other updates to the issue
-			if ($closedAt->format('Y-m-d') !== $since->format('Y-m-d'))
-			{
+		foreach ($closedIssues as $issue) {
+			$closedAt = new DateTimeImmutable($issue->closed_at);
+
+			// Only the closedAt date — ignore comment/update bumps.
+			if ($closedAt->format('Y-m-d') !== $since->format('Y-m-d')) {
 				continue;
 			}
 
-			if ($this->github->pulls->isMerged($this->getOption('source.owner'), $this->getOption('source.repo'), $issue->number))
-			{
+			if ($this->github->pulls->isMerged(
+				$this->optString('source.owner'),
+				$this->optString('source.repo'),
+				$issue->number
+			)) {
 				$closedAndMerged[] = $issue;
 			}
 		}
@@ -179,87 +99,242 @@ class GithubApiHelper
 		return $closedAndMerged;
 	}
 
-	/**
-	 * Get all closed issues with the translation label since a given timestamp
-	 *
-	 * @param   DateTime  $since  The timestamp since we want new data
-	 *
-	 * @return  array  an array of github Issue objects
-	 *
-	 * @since   1.0
-	 */
-	private function getClosedTranslationIssuesList($since)
+	public function createNewTranslationRequestIssueFromMergedTranslationIssue(object $sourceTranslationIssue): ?object
 	{
-		// List all closed issues with the watchlabel
-		$state  = 'closed';
-		$labels = urlencode($this->getOption('source.watchlabel'));
+		/** @var object{number: int, title: string} $sourceTranslationIssue */
+		$labels     = [$this->optString('translation.label')];
+		$sourcePull = $this->getSourcePull($sourceTranslationIssue->number);
 
-		return $this->github->issues->getListByRepository(
-			$this->getOption('source.owner'), $this->getOption('source.repo'), NULL, $state, NULL, NULL, $labels, NULL, NULL, $since
+		/** @var object{base: object{ref: string}, user: object{login: string}, _links: object{html: object{href: string}}} $sourcePull */
+		$labels[]    = JoomlaBranch::labelFor($sourcePull->base->ref);
+		$assignments = $this->optAssignments();
+
+		// Add label per top-level directory of changed translation files.
+		foreach ($this->getChangedTranslationFilesByPR($sourceTranslationIssue->number) as $filename) {
+			$path = explode('/', $filename);
+
+			if (in_array($path[0], ['administrator', 'api', 'installation'], true)) {
+				$labels[] = $path[0];
+			}
+
+			if ($path[0] === 'language') {
+				$labels[] = 'site';
+			}
+		}
+
+		$labels = array_values(array_unique($labels));
+
+		// Skip echoes from the joomla-translation-bot to avoid loops.
+		if ($sourcePull->user->login === 'joomla-translation-bot') {
+			return null;
+		}
+
+		$body = $this->buildIssueBody($sourcePull, $this->getSourcePullDiff($sourceTranslationIssue->number));
+
+		try {
+			return $this->github->issues->create(
+				$this->optString('translation.owner'),
+				$this->optString('translation.repo'),
+				$sourceTranslationIssue->title,
+				$body,
+				null,
+				null,
+				$labels,
+				$assignments
+			);
+		} catch (\Exception) {
+			// Retry without the diff — large diffs can blow the 65k issue body limit.
+			return $this->github->issues->create(
+				$this->optString('translation.owner'),
+				$this->optString('translation.repo'),
+				$sourceTranslationIssue->title,
+				$this->buildIssueBody($sourcePull, ''),
+				null,
+				null,
+				$labels,
+				$assignments
+			);
+		}
+	}
+
+	public function getLatestGithubRelease(): object
+	{
+		return $this->github->repositories->releases->getLatest(
+			$this->optString('translation.owner'),
+			$this->optString('translation.repo')
+		);
+	}
+
+	public function getLatestGithubReleaseByBranch(string $branch): ?object
+	{
+		/** @var iterable<string, object> $last5releases */
+		$last5releases = $this->github->repositories->releases->getList(
+			$this->optString('translation.owner'),
+			$this->optString('translation.repo'),
+			0,
+			5
+		);
+
+		$tagNames = [];
+
+		foreach ($last5releases as $tagName => $_release) {
+			$tagNames[] = (string) $tagName;
+		}
+
+		$latestTag = self::pickLatestTag($tagNames, $branch);
+
+		if ($latestTag === null) {
+			return null;
+		}
+
+		return $this->github->repositories->releases->getByTag(
+			$this->optString('translation.owner'),
+			$this->optString('translation.repo'),
+			$latestTag
 		);
 	}
 
 	/**
-	 * Get an pull from the source github owner/repo
+	 * Pure helper for selecting the highest-version tag matching a "major.minor" branch.
 	 *
-	 * @param   string  $pullrequestId  The pullrequest id
-	 *
-	 * @return  object
-	 *
-	 * @since   1.0
+	 * @param  list<string>  $tagNames
 	 */
-	private function getSourcePull($pullrequestId)
+	public static function pickLatestTag(array $tagNames, string $branch): ?string
 	{
-		return $this->github->pulls->get($this->getOption('source.owner'), $this->getOption('source.repo'), $pullrequestId);
+		$candidates = array_values(array_filter(
+			$tagNames,
+			static function (string $tag) use ($branch): bool {
+				$parts = explode('.', $tag);
+
+				if (count($parts) < 2) {
+					return false;
+				}
+
+				return $parts[0] . '.' . $parts[1] === $branch;
+			}
+		));
+
+		if ($candidates === []) {
+			return null;
+		}
+
+		usort($candidates, static fn (string $a, string $b): int => version_compare($b, $a));
+
+		return $candidates[0];
+	}
+
+	public function getLatestPublishedRelease(string $branch): string
+	{
+		$dataFileName = $this->getDateFileName('lastrelease' . $branch . '.data');
+
+		if (!is_file($dataFileName)) {
+			file_put_contents($dataFileName, $branch . '.0.0');
+		}
+
+		$contents = file_get_contents($dataFileName);
+
+		return $contents !== false ? trim($contents) : $branch . '.0.0';
+	}
+
+	public function setLatestPublishedRelease(string $branch, string $lastPublishedRelease): void
+	{
+		$dataFileName = $this->getDateFileName('lastrelease' . $branch . '.data');
+
+		if (is_file($dataFileName)) {
+			unlink($dataFileName);
+		}
+
+		file_put_contents($dataFileName, $lastPublishedRelease);
+	}
+
+	private function buildIssueBody(object $sourcePull, string $sourcePullDiff): string
+	{
+		/** @var object{_links: object{html: object{href: string}}} $sourcePull */
+		$diffSection = $sourcePullDiff !== ''
+			? PHP_EOL . '<details>' . PHP_EOL . '<summary>Click to expand the diff!</summary>' . PHP_EOL . PHP_EOL
+				. '```diff' . PHP_EOL . $sourcePullDiff . PHP_EOL . '```' . PHP_EOL . '</details>' . PHP_EOL
+			: '';
+
+		$body = $this->optString('translation.templagebody');
+		$body = str_replace('[sourcePullRequestUrl]', $sourcePull->_links->html->href, $body);
+
+		return str_replace('[sourcePullDiff]', $diffSection, $body);
+	}
+
+	private function getClosedTranslationIssuesList(DateTimeInterface $since): mixed
+	{
+		$labels = urlencode($this->optString('source.watchlabel'));
+
+		return $this->github->issues->getListByRepository(
+			$this->optString('source.owner'),
+			$this->optString('source.repo'),
+			null,
+			'closed',
+			null,
+			null,
+			$labels,
+			null,
+			null,
+			$since
+		);
+	}
+
+	private function getSourcePull(int $pullrequestId): object
+	{
+		return $this->github->pulls->get(
+			$this->optString('source.owner'),
+			$this->optString('source.repo'),
+			$pullrequestId
+		);
 	}
 
 	/**
-	 * Get the diff for the pullrequest
-	 *
-	 * @param   string  $pullrequestId  The pullrequest id
-	 *
-	 * @return  object
+	 * Fetch the raw diff for a PR — the Joomla GitHub package can't request the diff Accept header,
+	 * so we issue a manual HTTP call. The token is read from the options Registry, not a global.
 	 *
 	 * @link  https://developer.github.com/v3/pulls/#get-a-single-pull-request
 	 * @link  https://developer.github.com/v3/media/#commits-commit-comparison-and-pull-requests
-	 *
-	 * @since   1.0
 	 */
-	private function getSourcePullDiff($pullrequestId)
+	private function getSourcePullDiff(int $pullrequestId): string
 	{
 		$uri = new Uri(
 			'https://api.github.com/repos/'
-			. $this->getOption('source.owner')
+			. $this->optString('source.owner')
 			. '/'
-			. $this->getOption('source.repo')
+			. $this->optString('source.repo')
 			. '/pulls/'
-			. (int) $pullrequestId
+			. $pullrequestId
 		);
 
-		return HttpFactory::getHttp()->get($uri->toString(), ['Accept' => 'application/vnd.github.v3.diff', 'User-Agent' => $this->getOption('userAgent'), 'Authorization' => 'token ' . GITHUB_AUTHTOKEN])->body;
+		$headers = [
+			'Accept'        => 'application/vnd.github.v3.diff',
+			'User-Agent'    => $this->optString('userAgent'),
+			'Authorization' => 'token ' . $this->optString('github.authtoken'),
+		];
+
+		/** @var object{body: string} $response */
+		$response = (new HttpFactory())->getHttp()->get($uri->toString(), $headers);
+
+		return $response->body;
 	}
 
 	/**
-	 * Get changed files by PR
-	 *
-	 * @param   string  $pullrequestId  The pullrequest id
-	 *
-	 * @return  object
-	 *
-	 * @link  https://docs.github.com/en/rest/pulls/pulls?apiVersion=2022-11-28#list-pull-requests-files
-	 *
-	 * @since   1.0
+	 * @link    https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files
+	 * @return  list<string>
 	 */
-	private function getChangedTranslationFilesByPR($pullrequestId)
+	private function getChangedTranslationFilesByPR(int $pullrequestId): array
 	{
-		$changedFilesByPR = $this->github->pulls->getFiles($this->getOption('source.owner'), $this->getOption('source.repo'), $pullrequestId);
+		/** @var iterable<object{filename: string}> $changedFilesByPR */
+		$changedFilesByPR = $this->github->pulls->getFiles(
+			$this->optString('source.owner'),
+			$this->optString('source.repo'),
+			$pullrequestId
+		);
 
 		$translationFiles = [];
 
-		foreach ($changedFilesByPR as $key => $value)
-		{
-			if (strpos($value->filename, 'language/') !== false)
-			{
+		foreach ($changedFilesByPR as $value) {
+			if (str_contains($value->filename, 'language/')) {
 				$translationFiles[] = $value->filename;
 			}
 		}
@@ -267,207 +342,29 @@ class GithubApiHelper
 		return $translationFiles;
 	}
 
-	/**
-	 * Creates an translation request issue
-	 *
-	 * @param   object  $sourceTranslationIssue  The sourceTranslationIssue Object
-	 *
-	 * @return  boolean  True on success false on failiure
-	 *
-	 * @since   1.0
-	 */
-	public function createNewTranslationRequestIssueFromMergedTranslationIssue($sourceTranslationIssue)
+	private function getDateFileName(string $fileName): string
 	{
-		// Labels
-		$labels[] = $this->getOption('translation.label');
+		return $this->dataRootPath . $fileName;
+	}
 
-		$sourcePull = $this->getSourcePull($sourceTranslationIssue->number);
-		$labels[]   = $this->getTranslationTargetBranchLabel($sourcePull->base->ref);
-		$assigments = $this->getOption('translation.assigments') ?: [];
+	private function optString(string $key): string
+	{
+		$value = $this->options->get($key);
 
-		// Add label within which client(s) the files are changed
-		$changedTranslationFiles = $this->getChangedTranslationFilesByPR($sourceTranslationIssue->number);
-
-		foreach ($changedTranslationFiles as $key => $filename)
-		{
-			$path = explode('/', $filename);
-
-			if (\in_array($path[0], ['administrator', 'api', 'installation']))
-			{
-				$labels[] = (string) $path[0];
-			}
-
-			if (\in_array($path[0], ['language']))
-			{
-				$labels[] = 'site';
-			}
-		}
-
-		// Make sure the lables are unique
-		$labels = array_values(array_unique($labels));
-
-		$sourcePullDiff = $this->getSourcePullDiff($sourceTranslationIssue->number);
-		$sourcePullDiffText = PHP_EOL . '<details>' . PHP_EOL . '<summary>Click to expand the diff!</summary>' . PHP_EOL . PHP_EOL .
-		'```diff' . PHP_EOL . $sourcePullDiff . PHP_EOL . '```' . PHP_EOL . '</details>' . PHP_EOL;
-
-		$body = $this->getOption('translation.templagebody');
-		$body = str_replace('[sourcePullRequestUrl]', $sourcePull->_links->html->href, $body);
-		$body = str_replace('[sourcePullDiff]', $sourcePullDiffText, $body);
-
-		// Create the issue in the translation owner/repo but skip PRs from the joomla-translation-bot
-		if ($sourcePull->user->login !== 'joomla-translation-bot')
-		{
-			try
-			{
-				return $this->github->issues->create(
-					$this->getOption('translation.owner'),
-					$this->getOption('translation.repo'),
-					$sourceTranslationIssue->title,
-					$body,
-					NULL,
-					NULL,
-					$labels,
-					$assigments
-				);
-			}
-			catch (\Exception $e)
-			{
-				// Try to catch the error by sending the request without the source diff that could couse issues
-				$body = $this->getOption('translation.templagebody');
-				$body = str_replace('[sourcePullRequestUrl]', $sourcePull->_links->html->href, $body);
-				$body = str_replace('[sourcePullDiff]', '', $body);
-
-				return $this->github->issues->create(
-					$this->getOption('translation.owner'),
-					$this->getOption('translation.repo'),
-					$sourceTranslationIssue->title,
-					$body,
-					NULL,
-					NULL,
-					$labels,
-					$assigments
-				);
-			}
-		}
-
+		return is_string($value) ? $value : '';
 	}
 
 	/**
-	 * Returns the correct target label for a given target branch
-	 *
-	 * @param   string  $targetBranch  The branch target of the source repo
-	 *
-	 * @return  string  The label
-	 *
-	 * @since   1.0
+	 * @return  list<string>
 	 */
-	private function getTranslationTargetBranchLabel($targetBranch)
+	private function optAssignments(): array
 	{
-		if ($targetBranch === '3.10-dev')
-		{
-			return 'Joomla! 3.10';
-		}
-		return 'Joomla! ' . substr($targetBranch, 0, 3);
-	}
+		$value = $this->options->get('translation.assigments');
 
-	/**
-	 * Returns the latest release information
-	 *
-	 * @param   string  $targetBranch  The branch target of the source repo
-	 *
-	 * @return  string  The label
-	 *
-	 * @since   1.0
-	 */
-	public function getLatestGithubRelease()
-	{
-		return $this->github->repositories->releases->getLatest($this->getOption('translation.owner'), $this->getOption('translation.repo'));
-	}
-
-	/**
-	 * Returns the latest release information by branch
-	 *
-	 * @param   string  $targetBranch  The branch target of the source repo
-	 *
-	 * @return  string  The label
-	 *
-	 * @since   1.0
-	 */
-	public function getLatestGithubReleaseByBranch($branch)
-	{
-		// Get the last 5 releases
-		$last5releases = $this->github->repositories->releases->getList($this->getOption('translation.owner'), $this->getOption('translation.repo'), $page = 0, $limit = 5);
-
-		foreach ($last5releases as $tagName => $release)
-		{
-			// Check the branch from the tag name
-			$branchName = explode('.', $tagName);
-			$coreReleaseBranchName = $branchName[0] . '.' . $branchName[1];
-
-			// The tag name does not match, continue here
-			if ($coreReleaseBranchName !== $branch)
-			{
-				continue;
-			}
-
-			// Inital value
-			if (!isset($latestTag))
-			{
-				$latestTag = $tagName;
-			}
-
-			// When we have found a newer version use it
-			if (!version_compare($tagName, $latestTag, '>'))
-			{
-				$latestTag = $tagName;
-			}
+		if (!is_array($value)) {
+			return [];
 		}
 
-		// Return the latest Tage we found
-		return $this->github->repositories->releases->getByTag($this->getOption('translation.owner'), $this->getOption('translation.repo'), $latestTag);
-	}
-
-	/**
-	 * Returns the latest run date for the item
-	 *
-	 * @param   string  $branch  The core release branch
-	 *
-	 * @return  string  The last processed release
-	 *
-	 * @since   1.0
-	 */
-	public function getLatestPublishedRelease($branch): string
-	{
-		$dataFileName = $this->getDateFileName('lastrelease' . $branch . '.data');
-
-		// When there is no file create one with an empty date so it is now.
-		if (!is_file($dataFileName))
-		{
-			file_put_contents($dataFileName, $branch . '.0v0');
-		}
-
-		return trim(file_get_contents($dataFileName));
-	}
-
-	/**
-	 * Sets the latest run date to the given value
-	 *
-	 * @param   string  $branch                The core release branch
-	 * @param   string  $lastPublishedRelease  The last processed release
-	 *
-	 * @return  void
-	 *
-	 * @since   1.0
-	 */
-	public function setLatestPublishedRelease($branch, $lastPublishedRelease): void
-	{
-		$dataFileName = $this->getDateFileName('lastrelease' . $branch . '.data');
-
-		if (is_file($dataFileName))
-		{
-			unlink($dataFileName);
-		}
-
-		file_put_contents($dataFileName, $lastPublishedRelease);
+		return array_values(array_filter($value, 'is_string'));
 	}
 }

@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * JGerman GitHub Bot based on the Joomla! Framework
  *
@@ -6,78 +9,69 @@
  * @license    GNU General Public License version 2 or later; see LICENSE.txt
  */
 
-if (PHP_SAPI != 'cli')
-{
+use joomlagerman\Helper\Bootstrap;
+
+if (PHP_SAPI !== 'cli') {
 	echo 'This script needs to be called via CLI!' . PHP_EOL;
 	exit;
 }
 
-// Set error reporting for development
 error_reporting(-1);
 
-// Load the contstants
 require dirname(__DIR__) . '/includes/constants.php';
 
-// Ensure we've initialized Composer
-if (!file_exists(ROOT_PATH . '/vendor/autoload.php'))
-{
+if (!file_exists(ROOT_PATH . '/vendor/autoload.php')) {
 	exit(1);
 }
 
 require ROOT_PATH . '/vendor/autoload.php';
 
-// Load the github base configuration
-require dirname(__DIR__) . '/includes/github-base.php';
+$services = new Bootstrap();
 
-$logHelper->writeLogMessage('Start JGerman GitHub Bot');
-$notifierHelper->sendLogNotification('Start JGerman GitHub Bot');
+$services->log->writeLogMessage('Start JGerman GitHub Bot');
+$services->notifier->sendLogNotification('Start JGerman GitHub Bot');
 
-$currentRunDateTime = new DateTime('now');
-$lastRunDate = $githubApiHelper->getLatestRunDateTime();
+$currentRunDateTime = new DateTimeImmutable('now');
+$lastRunDate        = $services->github->getLatestRunDateTime();
 
-// Make sure we only run once a day
-if ($currentRunDateTime->format('Y-m-d') === $lastRunDate->format('Y-m-d'))
-{
-	$logHelper->writeLogMessage('We only run once a day so exiting here.');
-	$notifierHelper->sendLogNotification('We only run once a day so exiting here.');
-	$logHelper->writeLogMessage('End JGerman GitHub Bot');
-	$notifierHelper->sendLogNotification('End JGerman GitHub Bot');
+// Self-enforced once-per-day guard.
+if ($currentRunDateTime->format('Y-m-d') === $lastRunDate->format('Y-m-d')) {
+	$services->log->writeLogMessage('We only run once a day so exiting here.');
+	$services->notifier->sendLogNotification('We only run once a day so exiting here.');
+	$services->log->writeLogMessage('End JGerman GitHub Bot');
+	$services->notifier->sendLogNotification('End JGerman GitHub Bot');
 	exit;
 }
 
-$closedTranslationIssues = $githubApiHelper->getClosedAndMergedTranslationIssuesList($lastRunDate);
+$closedTranslationIssues = $services->github->getClosedAndMergedTranslationIssuesList($lastRunDate);
 
-$logHelper->writeLogMessage('We have ' . count($closedTranslationIssues) . ' closed translation issues since the last run.');
-$notifierHelper->sendLogNotification('We have ' . count($closedTranslationIssues) . ' closed translation issues since the last run.');
+$services->log->writeLogMessage('We have ' . count($closedTranslationIssues) . ' closed translation issues since the last run.');
+$services->notifier->sendLogNotification('We have ' . count($closedTranslationIssues) . ' closed translation issues since the last run.');
 
-if (!empty($closedTranslationIssues) || !is_array($closedTranslationIssues))
-{
+if ($closedTranslationIssues !== []) {
 	$createdTranslationRequestIssues = 0;
 
-	// We have issues to check
-	foreach ($closedTranslationIssues as $translationIssue)
-	{
-		$createdIssue = $githubApiHelper->createNewTranslationRequestIssueFromMergedTranslationIssue($translationIssue);
+	foreach ($closedTranslationIssues as $translationIssue) {
+		$createdIssue = $services->github->createNewTranslationRequestIssueFromMergedTranslationIssue($translationIssue);
 
-		if (!$createdIssue)
-		{
+		if ($createdIssue === null) {
 			continue;
 		}
 
-		$notifierHelper->sendMessageTemplateNotification([
-				'title'    => $createdIssue->title,
-				'issueUrl' => $createdIssue->html_url,
-			]
-		);
+		/** @var object{title: string, html_url: string} $createdIssue */
+		$services->notifier->sendMessageTemplateNotification([
+			'title'    => $createdIssue->title,
+			'issueUrl' => $createdIssue->html_url,
+		]);
 		$createdTranslationRequestIssues++;
 	}
 
-	$logHelper->writeLogMessage('We have ' . $createdTranslationRequestIssues . ' translation request issues created.');
-	$notifierHelper->sendLogNotification('We have ' . $createdTranslationRequestIssues . ' translation request issues created.');
+	$services->log->writeLogMessage('We have ' . $createdTranslationRequestIssues . ' translation request issues created.');
+	$services->notifier->sendLogNotification('We have ' . $createdTranslationRequestIssues . ' translation request issues created.');
 }
 
-$logHelper->writeLogMessage('Set the new latest run date to: ' . $currentRunDateTime->format('Y-m-d'));
-$notifierHelper->sendLogNotification('Set the new latest run date to: ' . $currentRunDateTime->format('Y-m-d'));
-$githubApiHelper->setLatestRunDateTime($currentRunDateTime);
-$logHelper->writeLogMessage('End JGerman GitHub Bot');
-$notifierHelper->sendLogNotification('End JGerman GitHub Bot');
+$services->log->writeLogMessage('Set the new latest run date to: ' . $currentRunDateTime->format('Y-m-d'));
+$services->notifier->sendLogNotification('Set the new latest run date to: ' . $currentRunDateTime->format('Y-m-d'));
+$services->github->setLatestRunDateTime($currentRunDateTime);
+$services->log->writeLogMessage('End JGerman GitHub Bot');
+$services->notifier->sendLogNotification('End JGerman GitHub Bot');

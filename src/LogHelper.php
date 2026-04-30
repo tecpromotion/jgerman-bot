@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * JGerman GitHub Bot Helper based on the Joomla! Framework
  *
@@ -8,57 +11,26 @@
 
 namespace joomlagerman\Helper;
 
-/**
- * Class for github
- *
- * @since  1.0
- */
-class LogHelper
+final class LogHelper
 {
-	/**
-	 * Constructor.
-	 *
-	 * @param   array  $options  The options for the LogHelper
-	 *
-	 * @since   1.0
-	 */
-	public function __construct($options)
+	private readonly string $logfile;
+
+	public function __construct(string $logName)
 	{
-		$this->logfile = ROOT_PATH . '/logs/' . date('Ym') . '_' . $options['logName'] . '.log';
+		$this->logfile = ROOT_PATH . '/logs/' . date('Ym') . '_' . $logName . '.log';
 	}
 
-	/**
-	 * Get the log message with date and time.
-	 *
-	 * @param   string  $message      The log messages
-	 * @param   string  $messageType  The log messagetype
-	 *
-	 * @return  string  The log message including metadata like dates
-	 *
-	 * @since   1.0
-	 */
-	private function getLogMessage($message, $messageType = false): string
+	public function writeLogMessage(string $message, ?string $messageType = null): void
 	{
-		if (is_string($messageType))
-		{
+		file_put_contents($this->logfile, $this->getLogMessage($message, $messageType), FILE_APPEND | LOCK_EX);
+	}
+
+	private function getLogMessage(string $message, ?string $messageType): string
+	{
+		if ($messageType !== null) {
 			return '[' . date('d/m/Y H:i:s') . '] - [' . $messageType . '] - ' . $message . PHP_EOL;
 		}
 
 		return '[' . date('d/m/Y H:i:s') . '] - ' . $message . PHP_EOL;
-	}
-
-	/**
-	 * Write the log message to the log file
-	 *
-	 * @param   string  $message      The log messages
-	 * @param   string  $messageType  The log messagetype
-	 *
-	 * @return  void
-	 *
-	 * @since   1.0
-	 */
-	public function writeLogMessage($message, $messageType = false): void
-	{
-		file_put_contents($this->logfile, $this->getLogMessage($message, $messageType), FILE_APPEND | LOCK_EX);
 	}
 }
