@@ -312,10 +312,9 @@ final class GithubApiHelper
 			'Authorization' => 'token ' . $this->optString('github.authtoken'),
 		];
 
-		/** @var object{body: string} $response */
 		$response = (new HttpFactory())->getHttp()->get($uri->toString(), $headers);
 
-		return $response->body;
+		return (string) $response->getBody();
 	}
 
 	/**
