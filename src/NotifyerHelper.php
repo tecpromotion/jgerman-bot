@@ -15,6 +15,7 @@ use Joomla\Http\Http;
 use Joomla\Http\HttpFactory;
 use Joomla\Registry\Registry;
 use joomlagerman\Enum\NotificationChannel;
+use joomlagerman\Notification\RunSummary;
 
 final class NotifyerHelper
 {
@@ -27,41 +28,7 @@ final class NotifyerHelper
 		$this->http    = $http ?? (new HttpFactory())->getHttp();
 	}
 
-	/**
-	 * @param  array<string, string>  $messageData
-	 */
-	public function sendMessageTemplateNotification(array $messageData, ?string $messageType = null): void
-	{
-		$this->sendNotificationMessage(
-			$this->getMessageTemplateNotificationMessage($messageData, $messageType)
-		);
-	}
-
-	public function sendLogNotification(string $message): void
-	{
-		$this->sendNotificationMessage($message);
-	}
-
-	/**
-	 * @param  array<string, string>  $messageData
-	 */
-	private function getMessageTemplateNotificationMessage(array $messageData, ?string $messageType): string
-	{
-		$template = $this->options->get('notifyer.messageTemplate');
-		$message  = is_string($template) ? $template : '';
-
-		foreach ($messageData as $key => $value) {
-			$message = str_replace('{' . $key . '}', $value, $message);
-		}
-
-		if ($messageType !== null) {
-			return '[jgerman-bot] - [' . $messageType . '] - ' . $message . PHP_EOL;
-		}
-
-		return '[jgerman-bot] - ' . $message . PHP_EOL;
-	}
-
-	private function sendNotificationMessage(string $message): void
+	public function sendRunSummary(RunSummary $summary): void
 	{
 		foreach (NotificationChannel::cases() as $channel) {
 			if (!$channel->isEnabled($this->options)) {
@@ -70,7 +37,7 @@ final class NotifyerHelper
 
 			$this->http->post(
 				$channel->endpoint($this->options),
-				$channel->payload($message, $this->options)
+				$channel->summaryPayload($summary, $this->options)
 			);
 		}
 	}

@@ -45,7 +45,6 @@ final class Bootstrap
 		$notifyerOptions->set('telegram.enabled', NOTIFYER_TELEGRAM_ENABLED);
 		$notifyerOptions->set('telegram.botToken', NOTIFYER_TELEGRAM_BOTTOKEN);
 		$notifyerOptions->set('telegram.chatId', NOTIFYER_TELEGRAM_CHATID);
-		$notifyerOptions->set('notifyer.messageTemplate', NOTIFYER_GITHUB_ISSUE_MESSAGE_TEMPLATE);
 
 		$this->github   = new GithubApiHelper($githubOptions, $options);
 		$this->log      = new LogHelper('jgerman');

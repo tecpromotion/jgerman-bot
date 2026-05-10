@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:packagist.org)"
+      "WebFetch(domain:packagist.org)",
+      "Bash(composer dump-autoload *)",
+      "Bash(composer test *)",
+      "Bash(composer stan *)",
+      "Bash(vendor/bin/phpstan analyse *)",
+      "Bash(composer cs-check *)"
     ]
   }
 }

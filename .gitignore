@@ -19,3 +19,6 @@ logs/*.log
 .php-cs-fixer.cache
 .phpunit.result.cache
 .phpunit.cache
+
+# Local PR draft (not part of the codebase)
+pr-body.md

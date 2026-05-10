@@ -24,7 +24,8 @@
     "autoload": {
         "psr-4": {
             "joomlagerman\\Helper\\": "src/",
-            "joomlagerman\\Enum\\": "src/Enum/"
+            "joomlagerman\\Enum\\": "src/Enum/",
+            "joomlagerman\\Notification\\": "src/Notification/"
         }
     },
     "autoload-dev": {

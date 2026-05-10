@@ -10,6 +10,8 @@ declare(strict_types=1);
  */
 
 use joomlagerman\Helper\Bootstrap;
+use joomlagerman\Notification\RunStatus;
+use joomlagerman\Notification\RunSummary;
 
 if (PHP_SAPI !== 'cli') {
 	echo 'This script needs to be called via CLI!' . PHP_EOL;
@@ -27,9 +29,9 @@ if (!file_exists(ROOT_PATH . '/vendor/autoload.php')) {
 require ROOT_PATH . '/vendor/autoload.php';
 
 $services = new Bootstrap();
+$summary  = new RunSummary();
 
 $services->log->writeLogMessage('Start JGerman GitHub Bot');
-$services->notifier->sendLogNotification('Start JGerman GitHub Bot');
 
 $currentRunDateTime = new DateTimeImmutable('now');
 $lastRunDate        = $services->github->getLatestRunDateTime();
@@ -37,41 +39,42 @@ $lastRunDate        = $services->github->getLatestRunDateTime();
 // Self-enforced once-per-day guard.
 if ($currentRunDateTime->format('Y-m-d') === $lastRunDate->format('Y-m-d')) {
 	$services->log->writeLogMessage('We only run once a day so exiting here.');
-	$services->notifier->sendLogNotification('We only run once a day so exiting here.');
 	$services->log->writeLogMessage('End JGerman GitHub Bot');
-	$services->notifier->sendLogNotification('End JGerman GitHub Bot');
+
+	$summary->setStatus(RunStatus::Noop);
+	$summary->addLine('Already ran today — skipped.');
+	$services->notifier->sendRunSummary($summary);
 	exit;
 }
 
 $closedTranslationIssues = $services->github->getClosedAndMergedTranslationIssuesList($lastRunDate);
+$closedCount             = count($closedTranslationIssues);
 
-$services->log->writeLogMessage('We have ' . count($closedTranslationIssues) . ' closed translation issues since the last run.');
-$services->notifier->sendLogNotification('We have ' . count($closedTranslationIssues) . ' closed translation issues since the last run.');
+$services->log->writeLogMessage('We have ' . $closedCount . ' closed translation issues since the last run.');
+$summary->addLine('Closed translation issues since last run: ' . $closedCount);
 
-if ($closedTranslationIssues !== []) {
-	$createdTranslationRequestIssues = 0;
+$createdTranslationRequestIssues = 0;
 
-	foreach ($closedTranslationIssues as $translationIssue) {
-		$createdIssue = $services->github->createNewTranslationRequestIssueFromMergedTranslationIssue($translationIssue);
+foreach ($closedTranslationIssues as $translationIssue) {
+	$createdIssue = $services->github->createNewTranslationRequestIssueFromMergedTranslationIssue($translationIssue);
 
-		if ($createdIssue === null) {
-			continue;
-		}
-
-		/** @var object{title: string, html_url: string} $createdIssue */
-		$services->notifier->sendMessageTemplateNotification([
-			'title'    => $createdIssue->title,
-			'issueUrl' => $createdIssue->html_url,
-		]);
-		$createdTranslationRequestIssues++;
+	if ($createdIssue === null) {
+		continue;
 	}
 
+	/** @var object{title: string, html_url: string} $createdIssue */
+	$summary->addCreatedIssue($createdIssue->title, $createdIssue->html_url);
+	$createdTranslationRequestIssues++;
+}
+
+if ($closedCount > 0) {
 	$services->log->writeLogMessage('We have ' . $createdTranslationRequestIssues . ' translation request issues created.');
-	$services->notifier->sendLogNotification('We have ' . $createdTranslationRequestIssues . ' translation request issues created.');
+	$summary->addLine('Created translation requests: ' . $createdTranslationRequestIssues);
 }
 
 $services->log->writeLogMessage('Set the new latest run date to: ' . $currentRunDateTime->format('Y-m-d'));
-$services->notifier->sendLogNotification('Set the new latest run date to: ' . $currentRunDateTime->format('Y-m-d'));
+$summary->addLine('Last run date set to: ' . $currentRunDateTime->format('Y-m-d'));
 $services->github->setLatestRunDateTime($currentRunDateTime);
+
 $services->log->writeLogMessage('End JGerman GitHub Bot');
-$services->notifier->sendLogNotification('End JGerman GitHub Bot');
+$services->notifier->sendRunSummary($summary);
